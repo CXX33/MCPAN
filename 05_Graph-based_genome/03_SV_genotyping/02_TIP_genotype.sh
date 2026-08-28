@@ -1,5 +1,83 @@
 #!/bin/bash
-#### SV genotyping using SV and their flank region sequences
+# ==============================================================================
+# SV genotyping using SV and their flanking sequences (TE-insertion / TIP)
+# ==============================================================================
+# Author: Xinxiu Chen
+#
+# Purpose
+# -------
+# Genotype the SVs missed by the vg graph pipeline (failed / complex /
+# TE-insertion SVs) by mapping short reads to reference and non-reference
+# TE-insertion alleles extended with 1 kb flanking sequences (ITIP-based
+# approach), then merge the TIP genotypes with the vg (graph) genotype
+# results to build the final integrated SV genotyping dataset.
+#
+# Main analyses
+# -------------
+#  1. Selection of problem SVs (failed + complex, from vg/SYRI calls)
+#  2. TE-index construction for the problem SVs (00_TE_index.py)
+#  3. Reference DEL/INS allele info from SYRI per-sample VCFs
+#     (01_ref_DEL_TE_info.py / 01_ref_INS_TE_info.py)
+#  4. Construction of 1-kb-flanking allele sequences
+#     (ref. TE insertions + non-reference TE insertions)
+#  5. Gap-sequence exclusion (panTE_seq_flanking1kb.fa)
+#  6. Per-sample read mapping and TIP genotyping (bwa + ITIP perl script)
+#  7. TIP genotype filtering and VCF formatting
+#  8. Merging TIP VCFs and plink filtering (TIP.SV.filter)
+#  9. Integration of vg and TIP genotype sets into a final SV VCF
+#     (MC_MS.SV.update) with bcftools stats
+#
+# Software and versions
+# ---------------------
+#   bwa              (short-read mapping to allele sequences)
+#   vcftools/bcftools/bgzip/tabix  (VCF processing)
+#   plink            (site/sample filtering)
+#   samtools         (faidx, allele-sequence extraction)
+#   ITIP-style custom scripts
+#     (extract_failed_sv.py, extract_complex_sv.py, 00_TE_index.py,
+#      01_ref_DEL_TE_info.py, 01_ref_INS_TE_info.py,
+#      02_DEL_extract_flank_1k_fa.py, 02_exclude_gap.py,
+#      03.TE_insertions_genotype.pl, format_genotype.py,
+#      redundancy_same_sv.py, format_vcf.py, difference.py,
+#      format_mullic.py)
+#   quick_qsub       (cluster submission wrapper)
+#   NOTE: record exact software versions before publication.
+#
+# Input files
+# -----------
+#   MC_MS_total_SV.frequency.xls     SV frequency table (from vg calls)
+#   ins_del.merge.final.vcf          SYRI-based INS/DEL calls
+#   MC_MS.SV.filter.vcf              vg-genotyped SV VCF
+#   ${i}.ins_del.filter.vcf          per-sample SYRI VCFs
+#   13C.fa / 00_database/${id}.fa    reference/query assemblies
+#   MS_MC_accession.WGS.list         sample read lists (R1 R2 name)
+#
+# Output files
+# ------------
+#   MC_MS_total_SV.problem_sv.xls / problem_sv.index   problem-SV set
+#   ref_DEL/INS.problem_sv.info                        allele info
+#   panTE_seq_flanking1kb.fa                           allele sequences
+#   tmp_te2/${name}.final.refereceTEinsertion          per-sample TIP genotypes
+#   TIP.merge.vcf / TIP.SV.filter.vcf                  merged/filtered TIP VCFs
+#   MC_MS.SV.update.vcf (+ .stat)                      final integrated SV VCF
+#
+# Notes
+# -----
+# - Replace /path_to/... and ./script with actual paths; ${i}/${name}
+#   are sample IDs.
+# - The "problem SVs" are those missing in vg graph genotyping (often
+#   TE insertions not represented in the graph); the 1 kb flanking
+#   sequence provides mapping specificity for the ITIP approach.
+# - Keep consistency between the allele FASTA (panTE_seq_flanking1kb.fa)
+#   and the header/sample order when merging into VCFs.
+# - Final filters: TIP: --geno 0.4 --mac 10; combined set:
+#   --geno 0.2 --mac 10 --biallelic-only - state exact thresholds in
+#   the Methods.
+# - bcftools stats on the final VCF (MC_MS.SV.update.vcf.stat) can be
+#   reported as the SV genotyping summary table.
+# Recommended: record exact software versions before publication.
+# ==============================================================================
+
 script=./script
 # Extract the missing SVs using the VG genotype pipeline
 $script/extract_failed_sv.py MC_MS_total_SV.frequency.xls ins_del.merge.final.vcf MC_MS_total_SV.failed_sv.xls

@@ -1,5 +1,70 @@
 #!/bin/bash
-#### Gene prediction using transcriptome evidence
+# ==============================================================================
+# Gene prediction using transcriptome evidence
+# ==============================================================================
+# Author: Xinxiu Chen
+#
+# Purpose
+# -------
+# Predict gene structures using transcriptome evidence assembled from
+# RNA-seq via multiple independent pipelines (hisat2+StringTie/TransDecoder,
+# Cufflinks, Trinity genome-guided and de novo, PASA), and integrate the
+# evidence into a training set / gene models for downstream annotation.
+#
+# Main analyses
+# -------------
+#  1. RNA-seq alignment and merge (hisat2 -> bam merge)
+#  2. StringTie assembly + TransDecoder ORF prediction
+#     (incl. homology support: blastp vs UniProt-SwissProt plants,
+#      hmmsearch vs Pfam)
+#  3. Cufflinks transcript assembly
+#  4. Trinity assembly (genome-guided and de novo)
+#  5. PASA integration (seqclean + PASA pipeline + training-set export)
+#
+# Software and versions
+# ---------------------
+#   hisat2 / samtools      (RNA-seq alignment)
+#   StringTie              (transcript assembly)
+#   TransDecoder v5.5.0    (ORF / gene prediction)
+#   BLAST+ (blastp)        (homology support; UniProt-SwissProt plants)
+#   HMMER (hmmsearch)      (domain support; Pfam-A)
+#   Cufflinks              (transcript assembly)
+#   Trinity                (genome-guided + de novo assembly)
+#   PASApipeline v2.4.1    (transcript integration, incl. seqclean, blat)
+#   AUGUSTUS 3.3.3         (config path for gene-model tools)
+#   NOTE: record exact software versions before publication.
+#
+# Input files
+# -----------
+#   genome.fa                reference (for alignment; hisat2-build)
+#   genome_masked.fa         repeat-masked genome (for TransDecoder)
+#   RNA_seq.name / RNA_R1.txt / RNA_R2.txt   RNA-seq read lists
+#
+# Output files
+# ------------
+#   ${i}_all_RNA.bam / ${i}_all_RNA.sort.bam   merged RNA-seq alignments
+#   transcripts.fasta / transcripts.gff3       StringTie/TransDecoder models
+#   transcripts.fasta.transdecoder.genome.gff3 genome-mapped ORF models
+#   cufflink/transcripts.gtf                   Cufflinks models
+#   trinity_ref / trinity_no_ref/              Trinity assemblies
+#   test_${i}_V1.assemblies.fasta / .gff3      PASA-merged transcripts
+#   best_candidates.gff3                       exported training/gene set
+#
+# Notes
+# -----
+# - Replace /path_to/... with actual paths; $i is the sample ID, $thread
+#   is the thread count.
+# - The hisat2/StringTie bam file must be sorted before downstream use;
+#   several sub-commands (cufflinks, Trinity) expect a sorted bam.
+# - Trinity de novo uses nested R1/R2 loops here - ensure read pairing is
+#   correct; adjust --max_memory to available RAM.
+# - PASA step requires a species-specific alignAssembly.config; blat is
+#   used as the aligner.
+# - The final best_candidates.gff3 serves as transcript evidence /
+#   training set for the MAKER / AUGUSTUS gene-annotation step.
+# Recommended: record exact software versions before publication.
+# ==============================================================================
+
 ref=genome.fa
 ref_masked=genome_masked.fa
 thread=12

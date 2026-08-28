@@ -157,7 +157,7 @@ based on https://github.com/HongboDoll/TomatoSuperPanGenome;
 TE genotyping section was based on https://github.com/caixu0518/ITIPs;
 
 Heritability calculation section was based on
-https://github.com/YaoZhou89/TGG.
+https://github.com/YaoZhou89/TGG;
 
 Demographic history and estimation of variant age section was based on https://github.com/xuebozhao16/CucurbitGenomics.
 

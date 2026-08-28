@@ -1,5 +1,72 @@
 #!/bin/bash
-#### TE-related SVs identification
+# ==============================================================================
+# TE-related SV identification
+# ==============================================================================
+# Author: Xinxiu Chen
+#
+# Purpose
+# -------
+# Classify structural variants according to their transposable-element
+# (TE) content: (1) annotate TEs in the genome(s) with EDTA, (2) build a
+# non-redundant TE library (cd-hit), (3) BLAST the SV sequences against
+# the TE library, and (4) assign each SV to a category
+# (complete-SV-TE / SV-containing / TE-containing / overlap) plus TE
+# superfamily/subfamily (LTR/Gypsy/Copia/DNA/Helitron via TEsorter).
+#
+# Main analyses
+# -------------
+#  1. TE annotation per genome (EDTA raw + full pipeline)
+#  2. Non-redundant TE library construction (cd-hit, -c 0.70)
+#  3. SV sequence extraction and BLAST against the TE library
+#     (blastn, identity >= 80%, alignment length >= 150 bp)
+#  4. Best-hit assignment and coverage-based classification
+#     (complete_SV_TE / SV_contain / TE_contain / overlap_SV_TE)
+#  5. LTR subfamily classification of TE-related SVs (TEsorter,
+#     rexdb-plant)
+#  6. Category counts and SV-length annotation
+#
+# Software and versions
+# ---------------------
+#   EDTA           (TE annotation; conda env EDTA)
+#   cd-hit         (TE library redundancy removal)
+#   BLAST+ (blastall)  (SV-to-TE search)
+#   TEsorter       (LTR/DNA TE classification; rexdb-plant DB)
+#   seqkit         (sequence retrieval)
+#   custom scripts (extract_sv_sequence.py, best_hit.py,
+#                   SV_TE_coverage.py, add_length.py)
+#   NOTE: record exact software versions before publication.
+#
+# Input files
+# -----------
+#   ins_del.merge.final.vcf    SYRI-based INS/DEL SV calls
+#   ins_del.info               SV length/coordinate info
+#   ${i}.fa.mod.EDTA.raw.fa    per-genome raw TE library (EDTA output)
+#   total.raw_TE.format.info   TE annotation info
+#
+# Output files
+# ------------
+#   TE_library.fa                  non-redundant TE library
+#   ins_del.fa                     SV sequences
+#   sv_TE.out / sv_TE.best.hit.out BLAST results / best hits
+#   sv_TE_raw.coverage.xls         SV-TE coverage table
+#   complete_SV_TE.txt / SV_contain.txt / TE_contain.txt / overlap_SV_TE.txt
+#   LTR_sv.fa / LTR_sv.*           LTR-related SVs + TEsorter output
+#   *.length.xls                   SV length-annotated tables
+#
+# Notes
+# -----
+# - Replace $ref, ./script and /path_to/... with actual paths.
+# - cd-hit parameters (-c 0.70 -aS 0.70 -aL 0.70 -l 100) set the TE
+#   library identity/length thresholds - state them in the Methods.
+# - Classification thresholds: coverage >= 0.8 for both SV and TE
+#   (complete), or one side < 0.8 (containing/overlap) - report how
+#   each category is defined.
+# - TEsorter rexdb-plant assigns LTR families (Gypsy/Copia) and DNA TEs;
+#   the four categories x TE-superfamily counts can be reported as a
+#   summary table/heatmap in the manuscript.
+# Recommended: record exact software versions before publication.
+# ==============================================================================
+
 # Prediction of TE in genomes using EDTA
 source ~/miniconda3/bin/activate
 conda activate ~/miniconda3/envs/EDTA

@@ -1,5 +1,66 @@
 #!/bin/bash
-#### Ab initio prediction
+# ==============================================================================
+# Ab initio gene prediction (SNAP / AUGUSTUS / GeneMark-ET)
+# ==============================================================================
+# Author: Xinxiu Chen
+#
+# Purpose
+# -------
+# Perform ab initio gene prediction with three tools, each trained on
+# the PASA transcriptome-derived training set (best_candidates.gff3),
+# to provide independent de novo gene models for integration in
+# EVidenceModeler (EVM).
+#
+# Main analyses
+# -------------
+#  1. SNAP: training-set preparation (PASA -> zff), HMM training
+#     (fathom/forge/hmm-assembler), and prediction
+#  2. AUGUSTUS: genbank-format training set (best_candidates.gff3),
+#     iterative training with bad-gene filtering, and prediction
+#  3. GeneMark-ET: splice-site training from RNA-seq (STAR SJ),
+#     self-training (gmes_petap.pl), and prediction (gmhmme3)
+#
+# Software and versions
+# ---------------------
+#   SNAP                (fathom, forge, hmm-assembler.pl, snap)
+#   AUGUSTUS 3.3.3      (etraining, augustus, new_species.pl, ...)
+#   GeneMark-ET         (gmes_petap.pl, gmhmme3)
+#   STAR                (RNA-seq alignment / splice-junction evidence)
+#   seqkit              (genome split for parallel AUGUSTUS)
+#   EVidenceModeler     (format converters: SNAP_to_GFF3.pl,
+#                        convert_genemarkGff3_2_EVMGff3.py)
+#   custom python scripts (eachgff2zff.py, changezff2oneline.py,
+#                        change_pos_snap.py, filter_ann.py)
+#   NOTE: record exact software versions before publication.
+#
+# Input files
+# -----------
+#   genome.fa            reference genome (FASTA)
+#   genome.mask.fa       repeat-masked genome (prediction input)
+#   best_candidates.gff3 PASA-integrated transcriptome (training set)
+#   melon_117_tissues_R1/R2.fq.gz  RNA-seq reads (GeneMark-ET, STAR)
+#
+# Output files
+# ------------
+#   SNAP:        my-genome.hmm, snap.zff, snap.gff3
+#   AUGUSTUS:    Melon_${i} species parameters, augustus.out, augustus_format.out
+#   GeneMark-ET: gmhmm.mod, genemark.out, genemark.gff3
+#
+# Notes
+# -----
+# - Replace /path_to/... with actual paths; $i is the sample ID.
+# - All three tools share the same PASA training set - keep it identical
+#   across tools for fair integration in EVM.
+# - SNAP: "pos" (locus list) is derived from the zff; the training set is
+#   filtered on the "OK" lines from fathom -validate.
+# - AUGUSTUS: bad genes are removed (filterGenes.pl) before final
+#   training; prediction is split with seqkit for parallelisation.
+# - GeneMark-ET: STAR index bases should be tuned with
+#   --genomeSAindexNbases (here 13 for ~390 Mb); gmes_petap.pl performs
+#   iterative self-training using splice sites (SJ.gff).
+# Recommended: record exact software versions before publication.
+# ==============================================================================
+
 ref=genome.fa
 ref_masked=genome.mask.fa
 thread=12

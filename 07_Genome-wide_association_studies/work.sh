@@ -1,6 +1,64 @@
 #!/bin/bash
-#### Genome-wide association studies
-## Taking the SV in total of the MS population as an example.
+# ==============================================================================
+# Genome-wide association study (GWAS, EMMAX)
+# ==============================================================================
+# Author: Xinxiu Chen
+#
+# Purpose
+# -------
+# Perform genome-wide association mapping of traits (e.g. fruit
+# bitterness) against SV variants in a subpopulation (here MS), using a
+# mixed linear model (EMMAX) that controls for population structure
+# (PCA covariates) and relatedness (kinship matrix), with the
+# significance threshold corrected for the effective number of
+# independent tests (GEC).
+#
+# Main analyses
+# -------------
+#  1. Variant QC (plink: --geno 0.2 --maf 0.01 --biallelic-only)
+#  2. Population-structure covariates (LD pruning + PCA, top 5 PCs)
+#  3. Kinship matrix estimation (emmax-kin-intel64)
+#  4. PED/MAP conversion for EMMAX input
+#  5. Effective-number-of-tests significance threshold (GEC)
+#  6. Mixed-model association test (emmax, per trait)
+#
+# Software and versions
+# ---------------------
+#   plink                (QC, LD pruning, PCA, format conversion)
+#   EMMAX                (emmax, emmax-kin-intel64; MLM)
+#   GEC (gec.jar)        (effective test number / significance threshold)
+#   NOTE: record exact software versions before publication.
+#
+# Input files
+# -----------
+#   MS_population_SV.vcf     SV VCF of the MS subpopulation
+#   ${i}.TE.phynotype        phenotype file per trait (e.g. fruit_bitterness)
+#
+# Output files
+# ------------
+#   ${spe}.* (ped/map/bed)        plink-formatted genotype data
+#   ${spe}_LDpruned*              LD-pruned set for PCA
+#   PCA.eigenvec / PCA_SV.txt     PCA covariates (top 5 PCs)
+#   ${spe}.kinf                   kinship matrix (EMMAX)
+#   ${spe}.efn / .threshold       GEC effective-N / significance threshold
+#   total_${i}.ps / .reml.*       EMMAX association results per trait
+#
+# Notes
+# -----
+# - Replace /path_to/... and $plink_path/$phynotype_path with actual
+#   paths; $i is the trait (fruit_bitterness is an example).
+# - QC thresholds: --geno 0.2 (missingness), --maf 0.01,
+#   --biallelic-only - state in Methods.
+# - LD pruning (--indep-pairwise 50 5 0.2) is applied only for PCA;
+#   the full variant set is used for the association test.
+# - EMMAX uses the kinship matrix (-k) plus PCA covariates (-c) to
+#   control for relatedness and structure; report the genomic-control
+#   / lambda values to validate model fit.
+# - GEC threshold: the genome-wide significance level is based on the
+#   effective number of independent SV tests; report the corrected
+#   P-value threshold alongside the Manhattan plot.
+# Recommended: record exact software versions before publication.
+# ==============================================================================
 
 vcf=MS_population_SV.vcf
 spe=MS_population_SV

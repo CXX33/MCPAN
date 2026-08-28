@@ -1,5 +1,72 @@
 #!/bin/bash
-#### SV genotyping using vg based on the graph-based pangenome
+# ==============================================================================
+# SV genotyping using vg (graph-based pangenome)
+# ==============================================================================
+# Author: Xinxiu Chen
+#
+# Purpose
+# -------
+# Genotype SVs across all accessions by mapping short WGS reads to a
+# graph-based pangenome with vg: (1) map reads with vg giraffe,
+# (2) genotype variants with vg pack + vg call, (3) normalise, filter
+# and merge per-sample VCFs, (4) correct duplicate-position sites, and
+# (5) apply final site/sample filters with plink.
+#
+# Main analyses
+# -------------
+#  1. Read mapping to the pangenome graph (vg giraffe; .xg/.gg/.gbwt)
+#  2. Variant genotyping (vg pack -Q 5 -> vg call -a)
+#  3. Per-sample VCF filtering (allele-depth filter_vcf_ad.py) and
+#     normalisation (bcftools norm: -m -both, -d none, --fasta-ref)
+#  4. Cross-sample merging (bcftools merge)
+#  5. Duplicate-position correction (custom scripts, parallelised)
+#  6. Final VCF assembly + plink filtering (--geno 0.4, --mac 5,
+#     --biallelic-only)
+#
+# Software and versions
+# ---------------------
+#   vg              (giraffe, pack, call; pangenome graph tool)
+#   bcftools/tabix/bgzip  (norm, merge, index)
+#   plink           (site/sample filtering)
+#   custom scripts  (filter_vcf_ad.py, format_vcf.py,
+#                    correct_identical_reference_pos_indel.py,
+#                    remove_problematic_indel_in_vcf.py)
+#   quick_qsub      (cluster submission wrapper)
+#   NOTE: record exact software versions before publication.
+#
+# Input files
+# -----------
+#   MS_MC_accession.WGS.list / supply.list   sample read lists (R1 R2 name)
+#   ${spe}.xg / .gg / .gbwt / .min / .dist   vg pangenome graph indexes
+#   PAV.vcf                                  presence/absence variant callset
+#   $ref                                     reference genome (for norm)
+#
+# Output files
+# ------------
+#   gam_file/${name}.pack / ${name}.vcf      per-sample genotyping
+#   vcf_filter/${i}.filter                   allele-depth filtered VCFs
+#   vcf_file/${i}.filter.norm.vcf.gz         normalised per-sample VCFs
+#   MC_MS_total.SV.merge.vcf                 merged raw VCF
+#   MC_MS_total.SV.final.vcf                 final merged VCF
+#   MC_MS.SV.filter.*                        plink-filtered genotype set
+#
+# Notes
+# -----
+# - Replace ${spe} with the pangenome graph prefix and $ref with the
+#   reference path; the graph indexes must be built from the same
+#   reference/panel used for SV calling (consistency with SYRI calls).
+# - vg call -a: allele-aware genotyping; -Q 5 sets the base-quality
+#   threshold for vg pack - state these in the Methods.
+# - Filtering: allele-depth (AD) filter per sample, then bcftools norm
+#   (-m -both split multiallelic; -d none drop duplicates; --fasta-ref
+#   left-normalise), merge, duplicate-position correction, and plink
+#   filters --geno 0.4 (missingness), --mac 5 (minor allele count),
+#   --biallelic-only.
+# - Keep the PAV.vcf (presence/absence) separate from the size-polymorphic
+#   SV VCF - they are merged here but represent different SV types.
+# Recommended: record exact software versions before publication.
+# ==============================================================================
+
 script=../01_SV_identification/script
 mkdir gam_file
 cat MS_MC_accession.WGS.list | while read i

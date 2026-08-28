@@ -1,5 +1,67 @@
 #!/bin/bash
-#### Estimating the insertion time based on SNPs in the 10-kb flanking region of TEs.
+# ==============================================================================
+# Estimating TE insertion time using SNPs in the 10-kb flanking regions
+# ==============================================================================
+# Author: Xinxiu Chen
+#
+# Purpose
+# -------
+# Estimate the insertion time of complete SV-TEs in each subpopulation
+# (agrestis / melo) using the GEVA method: extract SNPs in the 10 kb
+# flanking regions of the TE-insertion sites, phase haplotypes with
+# SHAPEIT4, and apply GEVA (an ARG-based dating approach) to infer the
+# allele age / insertion time from the surrounding SNP diversity.
+#
+# Main analyses
+# -------------
+#  1. Extraction of 10-kb TE flanking regions (complete_SV_TE -> BED)
+#  2. Flanking-SNP extraction per subpopulation
+#     (vcftools --bed; plink biallelic)
+#  3. SNP annotation for GEVA input (bcftools annotate, unique IDs)
+#  4. Haplotype phasing (SHAPEIT4, per chromosome)
+#  5. GEVA conversion (--vcf -> .bin + marker) and execution
+#     (--Ne 300000 --mut 7e-9; HMM files)
+#  6. Insertion-age extraction and per-subpopulation summary
+#
+# Software and versions
+# ---------------------
+#   vcftools           (flanking-SNP extraction)
+#   plink              (biallelic filtering)
+#   bcftools/bgzip/tabix (annotate / indexing)
+#   SHAPEIT4           (haplotype phasing)
+#   GEVA v1beta        (geva_v1beta; ARG-based dating)
+#   custom scripts     (00_extract_TE_flank_region.py, 01_extract_age.py)
+#   NOTE: record exact software versions before publication.
+#
+# Input files
+# -----------
+#   complete_SV_TE.txt               complete SV-TE list (from TE-related SV)
+#   agrestis/melo.filter_maf.snp.recode.vcf   subpopulation SNP VCFs
+#
+# Output files
+# ------------
+#   complete_TE_10k.bed                    10-kb flanking regions
+#   ${w}_TE_flank10k.final.vcf             flanking SNP VCFs
+#   ${w}.SNPannotated.forGEVA.vcf(.gz)     annotated VCFs
+#   shapeit4/${w}.${chrom}.phased.vcf      phased haplotypes
+#   geva_Conversion/${w}.${chrom}.bin      GEVA binary input
+#   geva_Execution/${w}.${chrom}.sites.txt(.final)   per-site ages
+#   ${w}.sites.final.xls                   per-subpopulation insertion times
+#
+# Notes
+# -----
+# - Replace /home/chenxinxiu/software/... with actual paths; $w is the
+#   subpopulation (agrestis/melo), $chrom ranges 1-12.
+# - Key parameters: --rec 1e-8 (recombination), --Ne 300000 (effective
+#   population size), --mut 7e-9 (mutation rate per site per year) -
+#   all must be stated in the Methods with justification.
+# - GEVA requires phased haplotypes; SNPs are annotated with unique IDs
+#   (CHROM_POS) so GEVA can track sites across the flanking window.
+# - Report insertion-time distributions (e.g. median age, bursts) per
+#   subpopulation; note that --Ne/--mut strongly affect absolute dates.
+# Recommended: record exact software versions before publication.
+# ==============================================================================
+
 ## Extracting SNPs in the 10-kb flanking region of TEs.
 ./00_extract_TE_flank_region.py complete_SV_TE.txt complete_TE_10k.bed
 agrestis_vcf=agrestis.filter_maf.snp.recode.vcf

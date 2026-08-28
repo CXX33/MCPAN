@@ -1,5 +1,60 @@
 #!/bin/bash
-###Contig anchored using 3D-DNA with Juicebox
+# ==============================================================================
+# Contig anchoring using 3D-DNA with Juicebox
+# ==============================================================================
+# Author: Xinxiu Chen
+#
+# Purpose
+# -------
+# Anchor and scaffold contigs into chromosomes using Hi-C data:
+#   (1) process Hi-C reads with Juicer (DpnII) to produce contact maps;
+#   (2) run the 3D-DNA assembly pipeline to order/orient contigs;
+#   (3) manually correct the assembly in Juicebox (.review.assembly)
+#       and re-run the post-review pipeline to finalize scaffolds.
+#
+# Main analyses
+# -------------
+#  1. Reference indexing (bwa index)
+#  2. Restriction-site generation (DpnII) and chrom.sizes preparation
+#  3. Hi-C read processing with Juicer (merged_nodups.txt)
+#  4. 3D-DNA assembly (run-asm-pipeline.sh, haploid mode)
+#  5. Juicebox manual curation (.review.assembly)
+#  6. Post-review re-assembly (run-asm-pipeline-post-review.sh)
+#
+# Software and versions
+# ---------------------
+#   Juicer 1.6 (CPU)          (juicer.sh, generate_site_positions.py)
+#   3D-DNA (run-asm-pipeline) (misc/run-asm-pipeline*.sh)
+#   bwa                       (read/ref alignment)
+#   Juicebox                  (manual review / curation)
+#   NOTE: record exact software versions before publication.
+#
+# Input files
+# -----------
+#   $ref                       contig-level reference assembly (FASTA)
+#   ${i}_R1/R2.fastq.gz        Hi-C paired-end reads (per library ${i})
+#
+# Output files
+# ------------
+#   ${ref}_DpnII.txt           restriction-site positions (DpnII)
+#   ${ref}.chrom.sizes         chromosome sizes table
+#   aligned/${i}.mnd           merged_nodups.txt (Juicer contact file)
+#   ${i}.review.assembly       Juicebox-curated assembly (post 3D-DNA)
+#   final scaffolds            run-asm-pipeline-post-review output
+#
+# Notes
+# -----
+# - Replace /path_to/juicer-1.6, /path_to/3d-dna-master and /path_to/01_3d_dna
+#   with actual paths; ${i} is the sample/library ID.
+# - -s DpnII: restriction enzyme; must match the enzyme used in the Hi-C
+#   library (change generate_site_positions.py accordingly if different).
+# - -m haploid: use haploid mode for a homozygous genome; use diploid
+#   mode if haplotypes are to be resolved.
+# - Juicebox curation is a manual step: load .review.assembly in Juicebox,
+#   fix misjoins/duplications, then save and re-run post-review pipeline.
+# Recommended: record exact software versions before publication.
+# ==============================================================================
+
 ref=contig.fa
 mkdir scripts references fastq restriction_sites
 cp -r /path_to/juicer-1.6/CPU/common scripts/

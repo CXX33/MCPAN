@@ -1,5 +1,73 @@
 #!/bin/bash
-#### Functional annotation for orthorgroup protein-coding genes
+# ==============================================================================
+# Functional annotation of orthogroup protein-coding genes
+# ==============================================================================
+# Author: Xinxiu Chen
+#
+# Purpose
+# -------
+# Annotate functions of orthogroup protein-coding genes (from OrthoFinder)
+# by combining: (1) InterProScan domain/GO annotation, (2) BLAST-based
+# homology against Arabidopsis (Araport11) and UniProt-SwissProt, and
+# (3) GO term information retrieval. Runs are parallelised across 100
+# protein partitions on a cluster (quick_qsub).
+#
+# Main analyses
+# -------------
+#  1. Orthogroup gene extraction (Orthofinder Orthogroups.txt -> gene list)
+#  2. Protein sequence retrieval and split into 100 partitions (seqkit)
+#  3. InterProScan annotation (domains/IPR/GO/Pfam) and result merging
+#  4. GO annotation assembly (combined GO + goterm information)
+#  5. BLASTp homology: Arabidopsis Araport11 (Arablast)
+#  6. BLASTp homology: UniProt-SwissProt (swiss_prot)
+#
+# Software and versions
+# ---------------------
+#   InterProScan 5.48-83.0   (domain/GO/Pfam annotation)
+#   BLAST+ (blastall)        (blastp homology search)
+#   seqkit                   (grep / split2)
+#   OrthoFinder              (Orthogroups.txt source)
+#   custom python scripts    (extract_Orthogroup_gene.py,
+#                             combine_interpro_result.py,
+#                             combine_GO_result.py, add_GO_infor.py,
+#                             extract_function.py)
+#   quick_qsub               (cluster job submission wrapper)
+#   NOTE: record exact software versions before publication.
+#
+# Input files
+# -----------
+#   Orthogroups.txt            OrthoFinder orthogroup table
+#   total_MC.pep               merged proteomes of all species
+#   Araport11_genes.201606.pep.fasta   Arabidopsis proteome
+#   uniprot_sprot_20201221.fasta       Swiss-Prot proteome
+#   goterm.txt                 GO term definitions
+#
+# Output files
+# ------------
+#   Orthogroup2Gene.xls                 gene-to-orthogroup table
+#   Orthogroup2Gene.pep                 orthogroup proteins
+#   Orthogroup2Gene_interpro.xls        InterPro domain annotations
+#   Orthogroup2Gene_GO_combine_info.xls GO annotations (+ term info)
+#   Orthogroup2Gene_to_Aradatabase.out  Araport11 homology annotation
+#   Orthogroup2Gene_to_Swissprot.out    Swiss-Prot homology annotation
+#
+# Notes
+# -----
+# - Replace /path_to/... with actual paths.
+# - InterProScan uses -goterms -iprlookup -pa -f TSV; retain the exact
+#   database set (Pfam, PANTHER, etc.) in the Methods.
+# - IPR/GO lines are parsed from the TSV with awk; final annotation is
+#   de-duplicated (sort | uniq) before combination.
+# - quick_qsub is a cluster scheduler wrapper (here 1 CPU per partition);
+#   adjust -q and resource flags to your cluster.
+# - BLAST threshold used: -e 1e-5, -F F (no low-complexity filter),
+#   top 3 hits (-b 3); state this in the Methods.
+# - Record database versions: Araport11 (2016-06), Swiss-Prot
+#   (2020-12-21), InterProScan (5.48-83.0) - all required for
+#   reproducibility.
+# Recommended: record exact software versions before publication.
+# ==============================================================================
+
 ln -s /path_to/Orthogroups/Orthogroups.txt
 ./extract_Orthogroup_gene.py Orthogroups.txt Orthogroup2Gene.xls
 cat /path_to/database/*.pep >> total_MC.pep

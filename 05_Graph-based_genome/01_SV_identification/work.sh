@@ -1,5 +1,79 @@
 #!/bin/bash
-#### SV identification using SYRI 
+# ==============================================================================
+# Structural variant (SV) identification using SYRI
+# ==============================================================================
+# Author: Xinxiu Chen
+#
+# Purpose
+# -------
+# Identify genome-wide structural variants (SVs) between a reference
+# (13C) and each query genome using whole-genome alignment (MUMmer +
+# minimap2) and SYRI classification: (1) call and classify SVs
+# (INS/DEL/INV/TRANS) with SYRI, (2) filter and format variants into
+# per-sample VCFs, and (3) merge all samples and correct problematic
+# (duplicate-position / repeat-overlapping) sites to produce final
+# merged SV VCFs (ins/del, INV, TRANS).
+#
+# Main analyses
+# -------------
+#  1. Whole-genome alignment (nucmer + delta-filter; minimap2 asm5)
+#  2. SV classification with SYRI (-F S; syri.out / syri.vcf / syri.pdf)
+#  3. SNP extraction from MUMmer (show-snps -> MUMmerSNPs2VCF.py)
+#  4. INS/DEL filtering (>20 bp), repeat exclusion, VCF formatting
+#  5. Translocation (TRANS) extraction and VCF construction
+#  6. Inversion (INV) extraction and VCF construction
+#  7. Cross-sample merging (bcftools merge) per SV type
+#  8. Problem-site correction (duplicate reference positions, repeat
+#     overlap) and final VCF formatting
+#
+# Software and versions
+# ---------------------
+#   MUMmer             (nucmer, delta-filter, show-coords, show-snps)
+#   minimap2           (asm5 alignment, --eqx)
+#   SYRI 1.4           (syri; plotsr for visualisation)
+#   bcftools / bgzip   (merge, index)
+#   samtools           (faidx for TRANS/INV allele extraction)
+#   custom scripts     (extract_mt20bp_pav.py, exclude_repeat_sv.py,
+#                       format_vcf_ins_del.py, output_translocation_from_vcf.py,
+#                       format_vcf_trans_inv.py,
+#                       correct_identical_reference_pos_indel.py,
+#                       repos_repeat_pos.py, correct_ins_del_problem2.py,
+#                       remove_problematic_indel_in_vcf.py,
+#                       format_ins_del_vcf.py; MUMmerSNPs2VCF.py external)
+#   quick_qsub         (cluster submission wrapper)
+#   NOTE: record exact software versions before publication.
+#
+# Input files
+# -----------
+#   $ref (13C.fa)              reference genome (FASTA)
+#   ${id}.fa                   query genomes (from all_query_gemomes.txt)
+#   header                     VCF header template
+#
+# Output files
+# ------------
+#   ${id}syri.out / ${id}syri.vcf / ${id}.syri.pdf   SYRI SV calls
+#   ${id}.filter.delta(.coords/.rsnp/.rsnp.vcf)      alignment + SNP VCF
+#   ${id}.ins_del.vcf(.filter/.format.vcf.gz)        INS/DEL VCFs
+#   ${id}.INV.vcf / ${id}.TRANS.vcf                  inversion/translocation VCFs
+#   ins_del.merge.vcf / INV.merge.vcf / TRANS.merge.vcf   merged VCFs
+#   ins_del.merge.final.vcf                          final merged INS/DEL VCF
+#
+# Notes
+# -----
+# - Replace /path_to_all_genomes/... with actual paths; ${id} is the
+#   query-genome ID (looped from all_query_gemomes.txt).
+# - Filtering thresholds: delta-filter -1 -i 95 -l 200; INS/DEL >= 20 bp;
+#   repeat-overlapping SVs excluded (exclude_repeat_sv.py) - state all
+#   thresholds in the Methods.
+# - TRANS/INV alleles are reconstructed from the reference/query
+#   sequence (samtools faidx) into VCF REF/ALT; quality set to 30.
+# - Problem-site correction is required because multiple SVs can share
+#   the same reference position; the final VCF is sorted and de-duplicated.
+# - This is the core SV dataset of the manuscript: keep every intermediate
+#   (per-sample VCFs + logs) for the code repository.
+# Recommended: record exact software versions before publication.
+# ==============================================================================
+
 path=/path_to_all_genomes/00_database
 ref=/path_to_all_genomes/00_database/13C.fa
 PATH_TO_PLOTSR=/path_to/syri-1.4/syri/bin/plotsr

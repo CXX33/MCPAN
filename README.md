@@ -159,6 +159,8 @@ TE genotyping section was based on https://github.com/caixu0518/ITIPs;
 Heritability calculation section was based on
 https://github.com/YaoZhou89/TGG.
 
+Demographic history and estimation of variant age section was based on https://github.com/xuebozhao16/CucurbitGenomics.
+
 ## 7. Citation
 
 [to be filled after publication]
